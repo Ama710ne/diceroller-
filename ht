@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoC ダイスローラー</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+        @media (min-width: 1024px) {
+            .main-layout {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        .input-group input, .input-group select {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            transition: all 0.2s;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.5);
+        }
+        .btn {
+            background-color: #3b82f6;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background-color: #2563eb;
+        }
+        .roll-history-item {
+            border-bottom: 1px solid #475569;
+        }
+        .success { color: #22c55e; }
+        .failure { color: #ef4444; }
+        .critical { color: #3b82f6; font-weight: bold; }
+        .fumble { color: #f97316; font-weight: bold; }
+        .special { color: #8b5cf6; font-weight: bold; }
+        .hard { color: #facc15; font-weight: bold; }
+
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            background-color: #334155;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -60px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #334155 transparent transparent transparent;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        #memo-panel, #calculator-panel {
+            transition: transform 0.3s ease-in-out;
+            transform: translateY(-100vh);
+            z-index: 50;
+        }
+        #memo-panel.is-open, #calculator-panel.is-open {
+            transform: translateY(0);
+        }
+
+        .calc-btn {
+            @apply p-4 rounded-lg text-2xl font-bold bg-slate-600 text-white hover:bg-slate-500 transition-all;
+        }
+        .calc-btn.op {
+            @apply bg-blue-500 hover:bg-blue-600;
+        }
+        .calc-btn.eq {
+            @apply bg-blue-700 hover:bg-blue-800 col-span-2;
+        }
+        .calc-btn.clear {
+            @apply bg-red-500 hover:bg-red-600;
+        }
+        .calc-btn.special {
+            @apply bg-purple-500 hover:bg-purple-600;
+        }
+    </style>
+</head>
+<body class="p-6 relative">
+    <!-- パネル開閉ボタン -->
+    <div class="fixed top-4 right-4 flex gap-2 z-50">
+        <button id="toggle-calculator-btn" class="p-3 rounded-full bg-blue-500 text-white shadow-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                <path d="M12 4.5v15m7.5-7.5h-15M12 4.5l6-6m-6 6l-6-6" />
+                <rect x="3" y="6" width="18" height="12" rx="2" ry="2" stroke-width="2" />
+            </svg>
+        </button>
+        <button id="toggle-memo-btn" class="p-3 rounded-full bg-blue-500 text-white shadow-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+            </svg>
+        </button>
+    </div>
+
+    <div class="main-layout container mx-auto p-6 bg-slate-800 rounded-xl shadow-2xl">
+        <!-- Room Mode Toggle -->
+        <div class="mb-6 flex justify-center">
+            <div class="bg-slate-700 rounded-lg p-1 inline-flex">
+                <button id="solo-mode-btn" class="px-4 py-2 rounded-md font-semibold transition-all bg-blue-500 text-white">ソロプレイ</button>
+                <button id="room-mode-btn" class="px-4 py-2 rounded-md font-semibold transition-all text-gray-300 hover:bg-slate-600">ルームプレイ</button>
+            </div>
+        </div>
+
+        <!-- Solo Play Section -->
+        <div id="solo-section">
+        <!-- Main Content (Left Side) -->
+        <div>
+            <h1 class="text-3xl font-bold text-center mb-6 text-blue-400">クトゥルフ神話TRPG ダイスローラー</h1>
+
+            <!-- ダイス入力エリア -->
+            <div class="mb-8 p-6 bg-slate-700 rounded-xl">
+                <h2 class="text-xl font-semibold mb-4 text-white">ダイスを振る</h2>
+
+                <!-- キャラシート読み込みセクション -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-1">キャラクターシートを読み込む</label>
+                    <input type="file" id="char-sheet-file" accept=".json" class="w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-violet-50 file:text-violet-700
+                        hover:file:bg-violet-100">
+                </div>
+
+                <!-- キャラクター選択セクション -->
+                <div id="character-selection-section" class="mb-4 hidden">
+                    <label for="character-select" class="block text-sm font-medium mb-1">キャラクターを選択</label>
+                    <div class="flex gap-2">
+                        <select id="character-select" class="flex-1 px-3 py-2 rounded-lg bg-slate-800 text-white">
+                            <option value="-1">-- キャラクターを選択してください --</option>
+                        </select>
+                        <button id="remove-char-btn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg font-bold">削除</button>
+                    </div>
+                </div>
+
+                <!-- SAN値と能力値の表示・編集 -->
+                <div id="attributes-display-section" class="mb-4 hidden p-4 bg-slate-600 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-2 text-white">能力値</h3>
+                    <div id="attributes-list" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        <!-- 能力値がここに動的に追加されます -->
+                    </div>
+                </div>
+
+                <!-- 技能選択セクション -->
+                <div id="skill-selection-section" class="mb-4 hidden">
+                    <label for="skill-select" class="block text-sm font-medium mb-1">技能/ステータスを選択</label>
+                    <select id="skill-select" class="w-full px-3 py-2 rounded-lg bg-slate-800 text-white">
+                        <option value="">-- 技能/ステータスを選択してください --</option>
+                    </select>
+                </div>
+
+                <div id="dice-inputs-container">
+                    <div class="dice-input-group flex items-end gap-2 mb-4">
+                        <div class="flex-1 input-group">
+                            <label class="block text-sm font-medium mb-1">ダイスの数</label>
+                            <input type="number" class="dice-count w-full px-3 py-2 rounded-lg" value="1" min="1">
+                        </div>
+                        <div class="text-center font-bold text-xl mb-1 text-gray-300">D</div>
+                        <div class="flex-1 input-group">
+                            <label class="block text-sm font-medium mb-1">ダイスの面数</label>
+                            <input type="number" class="dice-faces w-full px-3 py-2 rounded-lg" value="6" min="2">
+                        </div>
+                        <button class="remove-dice-btn bg-red-500 hover:bg-red-600 text-white px-2 py-1.5 rounded-lg font-bold text-xl hidden">-</button>
+                    </div>
+                </div>
+
+                <button id="add-dice-btn" class="btn w-full px-4 py-2 rounded-lg font-bold text-white text-lg mb-4 hover:scale-105 transform transition">ダイスを追加</button>
+
+                <!-- 修正値入力欄 (常に表示) -->
+                <div class="flex-1 input-group">
+                    <label for="modifier-input" class="block text-sm font-medium mb-1">修正値</label>
+                    <input type="number" id="modifier-input" value="0" class="w-full px-3 py-2 rounded-lg">
+                </div>
+
+                <button id="roll-btn" class="btn w-full px-4 py-3 rounded-lg font-bold text-white text-xl shadow-lg hover:scale-105 transform transition mt-4">
+                    ダイスを振る
+                </button>
+            </div>
+        </div>
+
+        <!-- Right Side Panel -->
+        <div class="space-y-6">
+            <!-- 結果表示 -->
+            <div class="bg-slate-700 rounded-xl p-6">
+                <h2 class="text-xl font-semibold mb-2 text-white">結果</h2>
+                <div id="result-display" class="text-5xl font-extrabold text-center p-6 rounded-lg bg-slate-600 text-yellow-300">
+                    0
+                </div>
+                <div id="result-status" class="text-center text-xl mt-4 font-semibold"></div>
+            </div>
+
+            <!-- 履歴 -->
+            <div class="bg-slate-700 rounded-xl p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-white">履歴</h2>
+                    <button id="clear-history-btn" class="text-sm text-red-400 hover:text-red-300 font-semibold">履歴を消去</button>
+                </div>
+                <div id="roll-history" class="space-y-3 max-h-64 overflow-y-auto">
+                    <!-- 履歴アイテムがここに追加されます -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Room Play Section -->
+        <div id="room-section" class="hidden">
+            <div class="mb-6">
+                <h1 class="text-3xl font-bold text-center mb-6 text-blue-400">TRPG ルームシステム</h1>
+                
+                <!-- Room Creation/Joining -->
+                <div id="room-lobby" class="bg-slate-700 rounded-xl p-6 mb-6">
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <!-- Create Room -->
+                        <div>
+                            <h3 class="text-lg font-semibold mb-4 text-white">部屋を作成</h3>
+                            <div class="space-y-3">
+                                <input type="text" id="room-name-input" placeholder="部屋名" class="w-full px-3 py-2 rounded-lg bg-slate-800 text-white">
+                                <input type="number" id="max-players-input" placeholder="最大人数" value="8" min="2" max="20" class="w-full px-3 py-2 rounded-lg bg-slate-800 text-white">
+                                <button id="create-room-btn" class="w-full px-4 py-2 rounded-lg font-bold text-white bg-green-500 hover:bg-green-600 transition-all">部屋を作成</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Join Room -->
+                        <div>
+                            <h3 class="text-lg font-semibold mb-4 text-white">部屋に参加</h3>
+                            <div class="space-y-3">
+                                <input type="text" id="room-code-input" placeholder="部屋コード" maxlength="6" class="w-full px-3 py-2 rounded-lg bg-slate-800 text-white uppercase">
+                                <select id="role-select" class="w-full px-3 py-2 rounded-lg bg-slate-800 text-white">
+                                    <option value="PL">プレイヤー</option>
+                                    <option value="KP">キーパー</option>
+                                </select>
+                                <button id="join-room-btn" class="w-full px-4 py-2 rounded-lg font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all">参加する</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Room Interface -->
+                <div id="room-interface" class="hidden">
+                    <!-- Room Info -->
+                    <div class="bg-slate-700 rounded-xl p-4 mb-6">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h3 id="room-name-display" class="text-xl font-bold text-white mb-1"></h3>
+                                <p id="room-code-display" class="text-sm text-gray-300">部屋コード: </p>
+                            </div>
+                            <div class="flex gap-2">
+                                <span id="user-role" class="px-3 py-1 rounded-full text-sm font-semibold bg-blue-500 text-white"></span>
+                                <button id="leave-room-btn" class="px-3 py-1 rounded-full text-sm font-semibold bg-red-500 hover:bg-red-600 text-white transition-all">退出</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Room Members -->
+                    <div class="bg-slate-700 rounded-xl p-4 mb-6">
+                        <h3 class="text-lg font-semibold mb-3 text-white">参加者</h3>
+                        <div id="room-members-list" class="space-y-2">
+                            <!-- Members will be added here -->
+                        </div>
+                    </div>
+
+                    <!-- Chat and Dice Area -->
+                    <div class="grid lg:grid-cols-2 gap-6">
+                        <!-- Chat -->
+                        <div class="bg-slate-700 rounded-xl p-4">
+                            <h3 class="text-lg font-semibold mb-3 text-white">チャット</h3>
+                            <div id="chat-messages" class="h-64 overflow-y-auto mb-3 space-y-2">
+                                <!-- Messages will be added here -->
+                            </div>
+                            <div class="flex gap-2">
+                                <input type="text" id="chat-input" placeholder="メッセージを入力..." class="flex-1 px-3 py-2 rounded-lg bg-slate-800 text-white">
+                                <button id="send-message-btn" class="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold transition-all">送信</button>
+                            </div>
+                        </div>
+
+                        <!-- Room Dice Roller -->
+                        <div class="bg-slate-700 rounded-xl p-4">
+                            <h3 class="text-lg font-semibold mb-3 text-white">ダイスロール</h3>
+                            <div class="mb-3">
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="secret-dice-checkbox" class="w-4 h-4">
+                                    <span class="text-white">秘匿ダイス（KPと自分のみ表示）</span>
+                                </label>
+                            </div>
+                            <div id="room-dice-inputs-container">
+                                <div class="dice-input-group flex items-end gap-2 mb-4">
+                                    <div class="flex-1 input-group">
+                                        <label class="block text-sm font-medium mb-1">ダイスの数</label>
+                                        <input type="number" class="dice-count w-full px-3 py-2 rounded-lg bg-slate-800 text-white" value="1" min="1">
+                                    </div>
+                                    <div class="text-center font-bold text-xl mb-1 text-gray-300">D</div>
+                                    <div class="flex-1 input-group">
+                                        <label class="block text-sm font-medium mb-1">ダイスの面数</label>
+                                        <input type="number" class="dice-faces w-full px-3 py-2 rounded-lg bg-slate-800 text-white" value="100" min="2">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex-1 input-group mb-4">
+                                <label for="room-modifier-input" class="block text-sm font-medium mb-1">修正値</label>
+                                <input type="number" id="room-modifier-input" value="0" class="w-full px-3 py-2 rounded-lg bg-slate-800 text-white">
+                            </div>
+                            <button id="room-roll-btn" class="w-full px-4 py-3 rounded-lg font-bold text-white text-xl bg-green-500 hover:bg-green-600 transition-all">ダイスを振る</button>
+                        </div>
+                    </div>
+
+                    <!-- Room Dice History -->
+                    <div class="bg-slate-700 rounded-xl p-6 mt-6">
+                        <h3 class="text-xl font-semibold mb-4 text-white">ダイス履歴</h3>
+                        <div id="room-dice-history" class="space-y-3 max-h-64 overflow-y-auto">
+                            <!-- Dice history will be added here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Memo Panel (Full-screen Overlay) -->
+    <div id="memo-panel" class="fixed top-0 left-0 w-full h-screen bg-slate-900 bg-opacity-95 p-6 transform transition-transform duration-300">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-semibold text-white">メモ</h2>
+            <button id="close-memo-btn" class="text-red-400 hover:text-red-300 text-3xl font-bold">&times;</button>
+        </div>
+        <textarea id="memo-textarea" class="w-full h-[calc(100vh-5rem)] p-4 rounded-lg bg-slate-700 text-white focus:outline-none focus:ring focus:ring-blue-400 resize-none"></textarea>
+    </div>
+
+    <!-- Calculator Panel (Full-screen Overlay) -->
+    <div id="calculator-panel" class="fixed top-0 left-0 w-full h-screen bg-slate-900 bg-opacity-95 p-6 flex flex-col items-center justify-center transform transition-transform duration-300">
+        <div class="bg-slate-800 rounded-xl shadow-2xl p-6 max-w-sm w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-semibold text-white">計算機</h2>
+                <button id="close-calculator-btn" class="text-red-400 hover:text-red-300 text-3xl font-bold">&times;</button>
+            </div>
+            <div id="calc-display" class="bg-slate-700 text-white text-right text-4xl p-4 rounded-lg mb-4 h-24 overflow-auto">0</div>
+            <div class="grid grid-cols-4 gap-2">
+                <button class="calc-btn clear" data-val="C">C</button>
+                <button class="calc-btn op" data-val="(">(</button>
+                <button class="calc-btn op" data-val=")">)</button>
+                <button class="calc-btn op" data-val="/">/</button>
+                <button class="calc-btn" data-val="7">7</button>
+                <button class="calc-btn" data-val="8">8</button>
+                <button class="calc-btn" data-val="9">9</button>
+                <button class="calc-btn op" data-val="*">*</button>
+                <button class="calc-btn" data-val="4">4</button>
+                <button class="calc-btn" data-val="5">5</button>
+                <button class="calc-btn" data-val="6">6</button>
+                <button class="calc-btn op" data-val="-">-</button>
+                <button class="calc-btn" data-val="1">1</button>
+                <button class="calc-btn" data-val="2">2</button>
+                <button class="calc-btn op" data-val="+">+</button>
+                <button class="calc-btn" data-val="0">0</button>
+                <button class="calc-btn" data-val=".">.</button>
+                <button class="calc-btn special" data-val="d">D</button>
+                <button class="calc-btn eq" data-val="=">=</button>
+            </div>
+            <div id="calc-history" class="mt-6 p-4 bg-slate-700 rounded-lg max-h-48 overflow-y-auto">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-white text-lg font-semibold">履歴</h3>
+                    <button id="clear-calc-history-btn" class="text-sm text-red-400 hover:text-red-300 font-semibold">履歴を消去</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const diceInputsContainer = document.getElementById('dice-inputs-container');
+            const addDiceBtn = document.getElementById('add-dice-btn');
+            const rollBtn = document.getElementById('roll-btn');
+            const modifierInput = document.getElementById('modifier-input');
+            const resultDisplay = document.getElementById('result-display');
+            const resultStatus = document.getElementById('result-status');
+            const rollHistory = document.getElementById('roll-history');
+            const clearHistoryBtn = document.getElementById('clear-history-btn');
+            const toggleMemoBtn = document.getElementById('toggle-memo-btn');
+            const closeMemoBtn = document.getElementById('close-memo-btn');
+            const memoPanel = document.getElementById('memo-panel');
+
+            const charSheetFile = document.getElementById('char-sheet-file');
+            const skillSelect = document.getElementById('skill-select');
+            const skillSelectionSection = document.getElementById('skill-selection-section');
+            const characterSelect = document.getElementById('character-select');
+            const characterSelectionSection = document.getElementById('character-selection-section');
+            const removeCharBtn = document.getElementById('remove-char-btn');
+            const attributesDisplaySection = document.getElementById('attributes-display-section');
+            const attributesList = document.getElementById('attributes-list');
+            const toggleCalculatorBtn = document.getElementById('toggle-calculator-btn');
+            const closeCalculatorBtn = document.getElementById('close-calculator-btn');
+            const calculatorPanel = document.getElementById('calculator-panel');
+            const calcDisplay = document.getElementById('calc-display');
+            const calcHistory = document.getElementById('calc-history');
+            const clearCalcHistoryBtn = document.getElementById('clear-calc-history-btn');
+
+            let characters = [];
+            let currentCharacterIndex = -1;
+
+            let currentExpression = '';
+            let history = [];
+
+            function appendToDisplay(value) {
+                if (currentExpression === '0' && value !== '.' && !isNaN(parseInt(value, 10))) {
+                    currentExpression = value;
+                } else {
+                    currentExpression += value;
+                }
+                calcDisplay.textContent = currentExpression;
+            }
+
+            function clearDisplay() {
+                currentExpression = '0';
+                calcDisplay.textContent = currentExpression;
+            }
+
+            function calculate() {
+                try {
+                    let expressionToEvaluate = currentExpression.replace(/(\d+)d(\d+)/g, (match, count, faces) => {
+                        let total = 0;
+                        const numRolls = parseInt(count, 10);
+                        const numFaces = parseInt(faces, 10);
+                        for (let i = 0; i < numRolls; i++) {
+                            total += Math.floor(Math.random() * numFaces) + 1;
+                        }
+                        return total;
+                    });
+                    
+                    const result = eval(expressionToEvaluate);
+                    addCalcHistory(`${currentExpression} = ${result}`);
+                    currentExpression = result.toString();
+                    calcDisplay.textContent = currentExpression;
+                } catch (e) {
+                    calcDisplay.textContent = 'エラー';
+                    currentExpression = '';
+                }
+            }
+            
+            function addCalcHistory(text) {
+                const now = new Date();
+                const formattedTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+                const historyItem = document.createElement('div');
+                historyItem.className = 'text-sm mb-1';
+                historyItem.innerHTML = `<span class="text-gray-400">[${formattedTime}]</span> ${text}`;
+                calcHistory.appendChild(historyItem);
+            }
+
+            clearCalcHistoryBtn.addEventListener('click', () => {
+                const historyItems = calcHistory.querySelectorAll('div');
+                for (let i = historyItems.length - 1; i >= 0; i--) {
+                    if (historyItems[i].classList.contains('text-sm')) {
+                        historyItems[i].remove();
+                    }
+                }
+            });
+
+            document.querySelectorAll('.calc-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const value = button.dataset.val;
+                    if (value === 'C') {
+                        clearDisplay();
+                    } else if (value === '=') {
+                        calculate();
+                    } else {
+                        appendToDisplay(value);
+                    }
+                });
+            });
+
+            const savedCharacters = localStorage.getItem('coc_characters');
+            if (savedCharacters) {
+                try {
+                    characters = JSON.parse(savedCharacters);
+                    if (characters.length > 0) {
+                        populateCharacterList();
+                        characterSelectionSection.classList.remove('hidden');
+                        displayResult('保存されたデータを読み込みました。', '');
+                    }
+                } catch (e) {
+                    console.error('Failed to load data from localStorage:', e);
+                }
+            }
+
+            function saveCharactersToLocalStorage() {
+                localStorage.setItem('coc_characters', JSON.stringify(characters));
+            }
+            
+            addDiceBtn.addEventListener('click', () => {
+                const newDiceGroup = document.querySelector('.dice-input-group').cloneNode(true);
+                newDiceGroup.querySelector('.dice-count').value = 1;
+                newDiceGroup.querySelector('.dice-faces').value = 6;
+                const removeBtn = newDiceGroup.querySelector('.remove-dice-btn');
+                removeBtn.classList.remove('hidden');
+                diceInputsContainer.appendChild(newDiceGroup);
+            });
+
+            diceInputsContainer.addEventListener('click', (e) => {
+                if (e.target.classList.contains('remove-dice-btn')) {
+                    e.target.closest('.dice-input-group').remove();
+                }
+            });
+
+            rollBtn.addEventListener('click', () => {
+                const modifier = parseInt(modifierInput.value, 10) || 0;
+                let isD100 = false;
+                let successValue = null;
+                let skillName = null;
+
+                // 技能が選択されているかチェック
+                if (skillSelect.value && currentCharacterIndex !== -1) {
+                    skillName = skillSelect.value;
+                    successValue = characters[currentCharacterIndex].allValues[skillName];
+                    isD100 = true;
+                }
+
+                if (isD100) {
+                    const rollResultRaw = rollD100();
+                    const rollResult = rollResultRaw + modifier;
+                    
+                    let status = '';
+                    let statusClass = '';
+
+                    const hardSuccess = Math.ceil(successValue / 2);
+                    const specialSuccess = Math.ceil(successValue / 5);
+
+                    // クリティカルとファンブルの判定 (技能値と出目による)
+                    const isCritical = rollResultRaw <= 5 && rollResultRaw <= successValue;
+                    const isFumble = (rollResultRaw >= 96 && rollResultRaw > successValue) || rollResultRaw === 100;
+                    
+                    if (isCritical) {
+                        status = '決定的成功（クリティカル）';
+                        statusClass = 'critical';
+                    } else if (isFumble) {
+                        status = '致命的失敗（ファンブル）';
+                        statusClass = 'fumble';
+                    } else if (rollResult === specialSuccess) {
+                        status = 'スペシャル成功';
+                        statusClass = 'special';
+                    } else if (rollResult === hardSuccess) {
+                        status = 'ハード成功';
+                        statusClass = 'hard';
+                    } else if (rollResult <= successValue) {
+                        status = '成功';
+                        statusClass = 'success';
+                    } else {
+                        status = '失敗';
+                        statusClass = 'failure';
+                    }
+
+                    const characterName = characters[currentCharacterIndex] ? characters[currentCharacterIndex].name : '不明な探索者';
+                    const rollLabel = `${characterName} - ${skillName}(${successValue})`;
+                    
+                    const modifierText = modifier !== 0 ? (modifier > 0 ? `+${modifier}` : `${modifier}`) : '';
+                    const resultText = modifier !== 0 ? `出目: ${rollResultRaw} ${modifierText} = ${rollResult}` : `${rollResult}`;
+
+                    displayResult(`${rollResult}`, status, statusClass);
+                    addHistory(`${rollLabel}：${resultText} → ${status}`, statusClass);
+                } else {
+                    let total = 0;
+                    let rollTexts = [];
+                    const diceGroups = document.querySelectorAll('.dice-input-group');
+
+                    diceGroups.forEach(group => {
+                        const count = parseInt(group.querySelector('.dice-count').value, 10);
+                        const faces = parseInt(group.querySelector('.dice-faces').value, 10);
+                        if (isNaN(count) || isNaN(faces) || count < 1 || faces < 2) return;
+
+                        let rolls = [];
+                        let subtotal = 0;
+                        for (let i = 0; i < count; i++) {
+                            const roll = Math.floor(Math.random() * faces) + 1;
+                            rolls.push(roll);
+                            subtotal += roll;
+                        }
+                        total += subtotal;
+                        rollTexts.push(`${count}D${faces}(${rolls.join(' + ')})`);
+                    });
+
+                    const finalTotal = total + modifier;
+                    const fullText = rollTexts.join(' + ');
+                    const modifierText = modifier !== 0 ? (modifier > 0 ? ` + ${modifier}` : ` ${modifier}`) : '';
+                    
+                    displayResult(`${finalTotal}`, `${fullText}${modifierText}`);
+                    addHistory(`${fullText}${modifierText} = ${finalTotal}`);
+                }
+            });
+
+            function rollD100() {
+                return Math.floor(Math.random() * 100) + 1;
+            }
+            
+            function displayResult(mainText, statusText, statusClass = '') {
+                resultDisplay.textContent = mainText;
+                resultStatus.textContent = statusText;
+                resultStatus.className = `text-center text-xl mt-4 font-semibold ${statusClass}`;
+            }
+
+            function addHistory(text, statusClass = '') {
+                const now = new Date();
+                const formattedTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+                const historyItem = document.createElement('div');
+                historyItem.className = `roll-history-item p-3 rounded-md ${statusClass}`;
+                historyItem.innerHTML = `<span class="text-xs text-gray-400 mr-2">[${formattedTime}]</span> ${text}`;
+                rollHistory.prepend(historyItem);
+            }
+
+            clearHistoryBtn.addEventListener('click', () => {
+                rollHistory.innerHTML = '';
+            });
+
+            toggleMemoBtn.addEventListener('click', () => {
+                memoPanel.classList.toggle('is-open');
+                updateToggleIcon(toggleMemoBtn, memoPanel, `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                    </svg>
+                `, `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                `);
+            });
+
+            toggleCalculatorBtn.addEventListener('click', () => {
+                calculatorPanel.classList.toggle('is-open');
+                 updateToggleIcon(toggleCalculatorBtn, calculatorPanel, `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                        <path d="M12 4.5v15m7.5-7.5h-15M12 4.5l6-6m-6 6l-6-6" />
+                        <rect x="3" y="6" width="18" height="12" rx="2" ry="2" stroke-width="2" />
+                    </svg>
+                `, `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                `);
+            });
+
+            function updateToggleIcon(button, panel, openIcon, closeIcon) {
+                if (panel.classList.contains('is-open')) {
+                    button.innerHTML = closeIcon;
+                } else {
+                    button.innerHTML = openIcon;
+                }
+            }
+
+            closeMemoBtn.addEventListener('click', () => {
+                memoPanel.classList.remove('is-open');
+                updateToggleIcon(toggleMemoBtn, memoPanel, `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                    </svg>
+                `, `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                `);
+            });
+
+            closeCalculatorBtn.addEventListener('click', () => {
+                calculatorPanel.classList.remove('is-open');
+                updateToggleIcon(toggleCalculatorBtn, calculatorPanel, `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                        <path d="M12 4.5v15m7.5-7.5h-15M12 4.5l6-6m-6 6l-6-6" />
+                        <rect x="3" y="6" width="18" height="12" rx="2" ry="2" stroke-width="2" />
+                    </svg>
+                `, `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                `);
+            });
+
+            charSheetFile.addEventListener('change', handleFileSelect);
+
+            function handleFileSelect(event) {
+                const file = event.target.files[0];
+                if (!file) {
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        let jsonString = e.target.result;
+                        
+                        jsonString = jsonString.replace(/　/g, ' ').replace(/：/g, ':');
+                        jsonString = jsonString.replace(/\"([^"]+)\"\s+(\d+)/g, '\"$1\": $2');
+                        jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
+
+                        const firstBraceIndex = jsonString.indexOf('{');
+                        const lastBraceIndex = jsonString.lastIndexOf('}');
+                        if (firstBraceIndex !== -1 && lastBraceIndex !== -1 && lastBraceIndex > firstBraceIndex) {
+                            jsonString = jsonString.substring(firstBraceIndex, lastBraceIndex + 1);
+                        }
+                        
+                        const newCharacter = JSON.parse(jsonString);
+
+                        let name = newCharacter.キャラクター名 || newCharacter.name || '無名';
+                        let attributes = newCharacter.ステータス || newCharacter.attributes || {};
+                        let skills = newCharacter.技能 || newCharacter.skills || {};
+
+                        const allValues = { ...attributes, ...skills };
+
+                        const characterData = {
+                            name: name,
+                            attributes: attributes,
+                            skills: skills,
+                            allValues: allValues
+                        };
+                        
+                        characters.push(characterData);
+                        saveCharactersToLocalStorage();
+                        populateCharacterList();
+                        characterSelectionSection.classList.remove('hidden');
+                        displayResult(`探索者「${name}」を読み込みました。`, '');
+                    } catch (error) {
+                        displayResult('JSONファイルの読み込みに失敗しました。', 'ファイル形式を確認してください。');
+                        console.error('Error parsing JSON:', error);
+                    }
+                };
+                reader.readAsText(file);
+            }
+
+            function populateCharacterList() {
+                characterSelect.innerHTML = '<option value="-1">-- キャラクターを選択してください --</option>';
+                characters.forEach((char, index) => {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.textContent = char.name;
+                    characterSelect.appendChild(option);
+                });
+                characterSelect.value = characters.length > 0 ? characters.length - 1 : -1;
+                updateSelectedCharacter(characters.length > 0 ? characters.length - 1 : -1);
+            }
+
+            characterSelect.addEventListener('change', (e) => {
+                const index = parseInt(e.target.value, 10);
+                updateSelectedCharacter(index);
+            });
+
+            function updateSelectedCharacter(index) {
+                currentCharacterIndex = index;
+                if (index !== -1) {
+                    const character = characters[index];
+                    populateAttributes(character.attributes);
+                    populateSkills(character.allValues);
+                    skillSelectionSection.classList.remove('hidden');
+                    attributesDisplaySection.classList.remove('hidden');
+                    removeCharBtn.classList.remove('hidden');
+                } else {
+                    attributesList.innerHTML = '';
+                    skillSelect.innerHTML = '<option value="">-- 技能/ステータスを選択してください --</option>';
+                    skillSelectionSection.classList.add('hidden');
+                    attributesDisplaySection.classList.add('hidden');
+                    removeCharBtn.classList.add('hidden');
+                }
+            }
+
+            function populateAttributes(attributes) {
+                attributesList.innerHTML = '';
+                for (const key in attributes) {
+                    const attrItem = document.createElement('div');
+                    attrItem.className = 'flex flex-col';
+                    attrItem.innerHTML = `
+                        <label class="text-sm font-medium mb-1">${key}</label>
+                        <input type="number" data-attr-key="${key}" value="${attributes[key]}" class="w-full px-2 py-1 rounded-lg bg-slate-800 text-white">
+                    `;
+                    attributesList.appendChild(attrItem);
+                }
+                attributesList.addEventListener('input', (e) => {
+                    if (e.target.tagName === 'INPUT') {
+                        const key = e.target.dataset.attrKey;
+                        const value = parseInt(e.target.value, 10);
+                        if (!isNaN(value) && currentCharacterIndex !== -1) {
+                            characters[currentCharacterIndex].attributes[key] = value;
+                            characters[currentCharacterIndex].allValues[key] = value;
+                            saveCharactersToLocalStorage();
+                        }
+                    }
+                });
+            }
+
+            function populateSkills(allValues) {
+                skillSelect.innerHTML = '<option value="">-- 技能/ステータスを選択してください --</option>';
+                const sortedKeys = Object.keys(allValues).sort();
+                sortedKeys.forEach(key => {
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = `${key} (${allValues[key]})`;
+                    skillSelect.appendChild(option);
+                });
+            }
+
+            skillSelect.addEventListener('change', () => {
+                const selectedSkill = skillSelect.value;
+                if (selectedSkill && currentCharacterIndex !== -1) {
+                    const character = characters[currentCharacterIndex];
+                    const successValue = character.allValues[selectedSkill];
+                    modifierInput.value = '';
+                }
+            });
+
+            removeCharBtn.addEventListener('click', () => {
+                if (currentCharacterIndex !== -1) {
+                    const charName = characters[currentCharacterIndex].name;
+                    characters.splice(currentCharacterIndex, 1);
+                    saveCharactersToLocalStorage();
+                    populateCharacterList();
+                    displayResult(`探索者「${charName}」を削除しました。`, '');
+                }
+            });
+        });
+
+        function rollD100() {
+            return Math.floor(Math.random() * 100) + 1;
+        }
+
+        function displayResult(mainText, statusText, statusClass = '') {
+            resultDisplay.textContent = mainText;
+            resultStatus.textContent = statusText;
+            resultStatus.className = `text-center text-xl mt-4 font-semibold ${statusClass}`;
+        }
+
+        function addHistory(text, statusClass = '') {
+            const now = new Date();
+            const formattedTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+            const historyItem = document.createElement('div');
+            historyItem.className = `roll-history-item p-3 rounded-md ${statusClass}`;
+            historyItem.innerHTML = `<span class="text-xs text-gray-400 mr-2">[${formattedTime}]</span> ${text}`;
+            rollHistory.prepend(historyItem);
+        }
+
+        // Room System Variables
+        let currentMode = 'solo'; // 'solo' or 'room'
+        let currentRoom = null;
+        let currentUserId = null;
+        let currentUserInfo = null;
+        let pollingInterval = null;
+
+        // Room System Elements
+        const soloModeBtn = document.getElementById('solo-mode-btn');
+        const roomModeBtn = document.getElementById('room-mode-btn');
+        const soloSection = document.getElementById('solo-section');
+        const roomSection = document.getElementById('room-section');
+        const roomLobby = document.getElementById('room-lobby');
+        const roomInterface = document.getElementById('room-interface');
+
+        // Room Creation/Join Elements
+        const roomNameInput = document.getElementById('room-name-input');
+        const maxPlayersInput = document.getElementById('max-players-input');
+        const createRoomBtn = document.getElementById('create-room-btn');
+        const roomCodeInput = document.getElementById('room-code-input');
+        const roleSelect = document.getElementById('role-select');
+        const joinRoomBtn = document.getElementById('join-room-btn');
+
+        // Room Interface Elements
+        const roomNameDisplay = document.getElementById('room-name-display');
+        const roomCodeDisplay = document.getElementById('room-code-display');
+        const userRole = document.getElementById('user-role');
+        const leaveRoomBtn = document.getElementById('leave-room-btn');
+        const roomMembersList = document.getElementById('room-members-list');
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const sendMessageBtn = document.getElementById('send-message-btn');
+
+        // Room Dice Elements
+        const secretDiceCheckbox = document.getElementById('secret-dice-checkbox');
+        const roomDiceInputsContainer = document.getElementById('room-dice-inputs-container');
+        const roomModifierInput = document.getElementById('room-modifier-input');
+        const roomRollBtn = document.getElementById('room-roll-btn');
+        const roomDiceHistory = document.getElementById('room-dice-history');
+
+        // Mode Toggle
+        soloModeBtn.addEventListener('click', () => switchMode('solo'));
+        roomModeBtn.addEventListener('click', () => switchMode('room'));
+
+        // Room Creation/Joining
+        createRoomBtn.addEventListener('click', createRoom);
+        joinRoomBtn.addEventListener('click', joinRoom);
+        leaveRoomBtn.addEventListener('click', leaveRoom);
+
+        // Chat
+        sendMessageBtn.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // Room Dice Rolling
+        roomRollBtn.addEventListener('click', rollRoomDice);
+
+        // Initialize
+        async function init() {
+            await loadUserInfo();
+            setupModeToggle();
+        }
+
+        async function loadUserInfo() {
+            try {
+                const response = await fetch('https://backend.youware.com/__user_info__');
+                const result = await response.json();
+                
+                if (result.code === 0 && result.data) {
+                    currentUserId = result.data.encrypted_yw_id;
+                    currentUserInfo = {
+                        display_name: result.data.display_name,
+                        photo_url: result.data.photo_url,
+                        is_logged_in: result.data.display_name !== null
+                    };
+                }
+            } catch (error) {
+                console.error('Failed to load user info:', error);
+            }
+        }
+
+        function setupModeToggle() {
+            soloModeBtn.addEventListener('click', () => switchMode('solo'));
+            roomModeBtn.addEventListener('click', () => switchMode('room'));
+        }
+
+        function switchMode(mode) {
+            currentMode = mode;
+            
+            if (mode === 'solo') {
+                soloModeBtn.classList.add('bg-blue-500', 'text-white');
+                soloModeBtn.classList.remove('text-gray-300', 'hover:bg-slate-600');
+                roomModeBtn.classList.remove('bg-blue-500', 'text-white');
+                roomModeBtn.classList.add('text-gray-300', 'hover:bg-slate-600');
+                
+                soloSection.classList.remove('hidden');
+                roomSection.classList.add('hidden');
+                
+                // Stop polling if active
+                if (pollingInterval) {
+                    clearInterval(pollingInterval);
+                    pollingInterval = null;
+                }
+            } else {
+                roomModeBtn.classList.add('bg-blue-500', 'text-white');
+                roomModeBtn.classList.remove('text-gray-300', 'hover:bg-slate-600');
+                soloModeBtn.classList.remove('bg-blue-500', 'text-white');
+                soloModeBtn.classList.add('text-gray-300', 'hover:bg-slate-600');
+                
+                soloSection.classList.add('hidden');
+                roomSection.classList.remove('hidden');
+            }
+        }
+
+        async function createRoom() {
+            const roomName = roomNameInput.value.trim();
+            const maxPlayers = parseInt(maxPlayersInput.value) || 8;
+
+            if (!roomName) {
+                alert('部屋名を入力してください');
+                return;
+            }
+
+            try {
+                const response = await fetch('https://backend.youware.com/api/rooms/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room_name: roomName,
+                        max_players: maxPlayers
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentRoom = {
+                        id: result.room_id,
+                        room_code: result.room_code,
+                        room_name: roomName
+                    };
+                    
+                    showRoomInterface();
+                    startPolling();
+                    
+                    // Clear inputs
+                    roomNameInput.value = '';
+                    maxPlayersInput.value = '8';
+                } else {
+                    alert('部屋の作成に失敗しました: ' + (result.error || '不明なエラー'));
+                }
+            } catch (error) {
+                console.error('Create room error:', error);
+                alert('部屋の作成に失敗しました');
+            }
+        }
+
+        async function joinRoom() {
+            const roomCode = roomCodeInput.value.trim().toUpperCase();
+            const role = roleSelect.value;
+
+            if (!roomCode) {
+                alert('部屋コードを入力してください');
+                return;
+            }
+
+            try {
+                const response = await fetch('https://backend.youware.com/api/rooms/join', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room_code: roomCode,
+                        role: role
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentRoom = {
+                        id: result.room_id,
+                        room_code: roomCode,
+                        room_name: result.room_name
+                    };
+                    
+                    showRoomInterface();
+                    startPolling();
+                    
+                    // Clear inputs
+                    roomCodeInput.value = '';
+                    roleSelect.value = 'PL';
+                } else {
+                    alert('部屋への参加に失敗しました: ' + (result.error || '不明なエラー'));
+                }
+            } catch (error) {
+                console.error('Join room error:', error);
+                alert('部屋への参加に失敗しました');
+            }
+        }
+
+        async function leaveRoom() {
+            if (!currentRoom || !currentUserId) return;
+
+            try {
+                const response = await fetch('https://backend.youware.com/api/rooms/leave', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room_id: currentRoom.id
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentRoom = null;
+                    showRoomLobby();
+                    
+                    if (pollingInterval) {
+                        clearInterval(pollingInterval);
+                        pollingInterval = null;
+                    }
+                } else {
+                    alert('部屋からの退出に失敗しました: ' + (result.error || '不明なエラー'));
+                }
+            } catch (error) {
+                console.error('Leave room error:', error);
+                alert('部屋からの退出に失敗しました');
+            }
+        }
+
+        function showRoomLobby() {
+            roomLobby.classList.remove('hidden');
+            roomInterface.classList.add('hidden');
+        }
+
+        function showRoomInterface() {
+            roomLobby.classList.add('hidden');
+            roomInterface.classList.remove('hidden');
+            
+            if (currentRoom) {
+                roomNameDisplay.textContent = currentRoom.room_name;
+                roomCodeDisplay.textContent = `部屋コード: ${currentRoom.room_code}`;
+            }
+        }
+
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            
+            if (!message || !currentRoom) return;
+
+            try {
+                const response = await fetch(`https://backend.youware.com/api/rooms/${currentRoom.room_code}/send-message`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message_content: message
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    chatInput.value = '';
+                } else {
+                    alert('メッセージの送信に失敗しました: ' + (result.error || '不明なエラー'));
+                }
+            } catch (error) {
+                console.error('Send message error:', error);
+                alert('メッセージの送信に失敗しました');
+            }
+        }
+
+        async function rollRoomDice() {
+            if (!currentRoom) return;
+
+            const modifier = parseInt(roomModifierInput.value) || 0;
+            const diceCount = parseInt(roomDiceInputsContainer.querySelector('.dice-count').value) || 1;
+            const diceFaces = parseInt(roomDiceInputsContainer.querySelector('.dice-faces').value) || 100;
+            const isSecret = secretDiceCheckbox.checked;
+
+            // Roll dice
+            let rolls = [];
+            let total = 0;
+            for (let i = 0; i < diceCount; i++) {
+                const roll = Math.floor(Math.random() * diceFaces) + 1;
+                rolls.push(roll);
+                total += roll;
+            }
+            const finalResult = total + modifier;
+
+            const rollExpression = `${diceCount}D${diceFaces}${modifier !== 0 ? (modifier > 0 ? `+${modifier}` : modifier) : ''}`;
+            const rollResult = rolls.join(' + ');
+
+            try {
+                const response = await fetch('https://backend.youware.com/api/dice/roll', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room_id: currentRoom.id,
+                        roll_type: isSecret ? 'secret' : 'public',
+                        dice_expression: rollExpression,
+                        roll_result: rollResult,
+                        final_result: finalResult
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    roomModifierInput.value = '0';
+                } else {
+                    alert('ダイスロールに失敗しました: ' + (result.error || '不明なエラー'));
+                }
+            } catch (error) {
+                console.error('Roll dice error:', error);
+                alert('ダイスロールに失敗しました');
+            }
+        }
+
+        function startPolling() {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+            }
+
+            // Initial load
+            updateRoomData();
+
+            // Poll every 3 seconds
+            pollingInterval = setInterval(updateRoomData, 3000);
+        }
+
+        async function updateRoomData() {
+            if (!currentRoom) return;
+
+            try {
+                // Get room info and members
+                const roomResponse = await fetch(`https://backend.youware.com/api/rooms/${currentRoom.room_code}/info`);
+                const roomResult = await roomResponse.json();
+
+                if (roomResult.room) {
+                    updateRoomMembers(roomResult.members);
+                    
+                    // Update user role display
+                    const userMember = roomResult.members.find(m => m.user_id === currentUserId);
+                    if (userMember) {
+                        userRole.textContent = userMember.role === 'KP' ? 'キーパー' : 'プレイヤー';
+                        userRole.className = userMember.role === 'KP' ? 
+                            'px-3 py-1 rounded-full text-sm font-semibold bg-purple-500 text-white' : 
+                            'px-3 py-1 rounded-full text-sm font-semibold bg-blue-500 text-white';
+                    }
+                }
+
+                // Get messages
+                const messagesResponse = await fetch(`https://backend.youware.com/api/rooms/${currentRoom.room_code}/messages`);
+                const messagesResult = await messagesResponse.json();
+
+                if (messagesResult.messages) {
+                    updateChatMessages(messagesResult.messages);
+                }
+
+                // Get dice rolls
+                const rollsResponse = await fetch(`https://backend.youware.com/api/rooms/${currentRoom.room_code}/rolls`);
+                const rollsResult = await rollsResponse.json();
+
+                if (rollsResult.rolls) {
+                    updateRoomDiceHistory(rollsResult.rolls);
+                }
+            } catch (error) {
+                console.error('Update room data error:', error);
+            }
+        }
+
+        function updateRoomMembers(members) {
+            roomMembersList.innerHTML = '';
+            
+            members.forEach(member => {
+                const memberDiv = document.createElement('div');
+                memberDiv.className = 'flex items-center justify-between p-2 rounded-lg bg-slate-600';
+                
+                const roleColor = member.role === 'KP' ? 'bg-purple-500' : 'bg-blue-500';
+                const roleText = member.role === 'KP' ? 'キーパー' : 'プレイヤー';
+                
+                memberDiv.innerHTML = `
+                    <div class="flex items-center space-x-2">
+                        <span class="px-2 py-1 rounded-full text-xs font-semibold ${roleColor} text-white">${roleText}</span>
+                        <span class="text-white">${member.user_name}</span>
+                    </div>
+                `;
+                
+                roomMembersList.appendChild(memberDiv);
+            });
+        }
+
+        function updateChatMessages(messages) {
+            chatMessages.innerHTML = '';
+            
+            messages.forEach(message => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'p-2 rounded-lg mb-2';
+                
+                const timestamp = new Date(message.created_at * 1000);
+                const timeStr = `${timestamp.getHours().toString().padStart(2, '0')}:${timestamp.getMinutes().toString().padStart(2, '0')}`;
+                
+                if (message.message_type === 'system') {
+                    messageDiv.className += ' bg-yellow-900 text-yellow-200';
+                    messageDiv.innerHTML = `<span class="text-xs">[${timeStr}]</span> <span class="font-semibold">${message.message_content}</span>`;
+                } else if (message.message_type === 'join' || message.message_type === 'leave') {
+                    messageDiv.className += ' bg-blue-900 text-blue-200';
+                    messageDiv.innerHTML = `<span class="text-xs">[${timeStr}]</span> <span class="font-semibold">${message.message_content}</span>`;
+                } else {
+                    messageDiv.className += ' bg-slate-600 text-white';
+                    messageDiv.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <span class="font-semibold">${message.sender_name}:</span>
+                            <span class="text-xs text-gray-400">${timeStr}</span>
+                        </div>
+                        <div class="mt-1">${message.message_content}</div>
+                    `;
+                }
+                
+                chatMessages.appendChild(messageDiv);
+            });
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function updateRoomDiceHistory(rolls) {
+            roomDiceHistory.innerHTML = '';
+            
+            rolls.forEach(roll => {
+                const rollDiv = document.createElement('div');
+                rollDiv.className = 'p-3 rounded-lg bg-slate-600 mb-2';
+                
+                const timestamp = new Date(roll.created_at * 1000);
+                const timeStr = `${timestamp.getHours().toString().padStart(2, '0')}:${timestamp.getMinutes().toString().padStart(2, '0')}`;
+                
+                const typeBadge = roll.roll_type === 'secret' ? 
+                    '<span class="px-2 py-1 rounded text-xs font-semibold bg-red-500 text-white">秘匿</span>' : 
+                    '<span class="px-2 py-1 rounded text-xs font-semibold bg-green-500 text-white">公開</span>';
+                
+                rollDiv.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-semibold text-white">${roll.roller_name}</span>
+                            ${typeBadge}
+                        </div>
+                        <span class="text-xs text-gray-400">${timeStr}</span>
+                    </div>
+                    <div class="text-sm text-gray-300 mb-1">${roll.dice_expression} = ${roll.roll_result} → ${roll.final_result}</div>
+                    ${roll.success_level ? `<div class="text-sm font-semibold ${getSuccessClass(roll.success_level)}">${roll.success_level}</div>` : ''}
+                `;
+                
+                roomDiceHistory.appendChild(rollDiv);
+            });
+        }
+
+        function getSuccessClass(successLevel) {
+            switch (successLevel) {
+                case '決定的成功（クリティカル）': return 'text-blue-400';
+                case '致命的失敗（ファンブル）': return 'text-red-400';
+                case 'スペシャル成功': return 'text-purple-400';
+                case 'ハード成功': return 'text-yellow-400';
+                case '成功': return 'text-green-400';
+                case '失敗': return 'text-red-400';
+                default: return 'text-gray-300';
+            }
+        }
+
+        // Initialize the application
+        init();
+    </script>
+</body>
+</html>

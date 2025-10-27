@@ -1,0 +1,70 @@
+# TRPG CoC Dice Roller with Room System
+
+## Project Overview
+This is a comprehensive TRPG (tabletop role-playing game) dice roller application specifically designed for Call of Cthulhu gameplay. It features both solo play and multiplayer room-based gameplay with real-time dice sharing and role management.
+
+## Key Features
+- **Solo Play Mode**: Traditional dice rolling with character sheet support
+- **Room System**: Create and join TRPG rooms with unique 6-character codes
+- **Role Management**: KP (Keeper/Game Master) and PL (Player) roles with different permissions
+- **Real-time Dice Sharing**: All room members can see dice results in real-time
+- **Secret Dice**: Private dice rolls visible only to KP and the rolling player
+- **Chat System**: In-room messaging for coordination
+- **Character Sheet Support**: Import and manage CoC character sheets
+
+## Architecture
+
+### Backend (Youware Backend)
+- **Database**: D1 SQLite with rooms, members, dice rolls, and messages tables
+- **API**: RESTful endpoints for room management, dice rolling, and messaging
+- **Authentication**: Uses Youware's built-in user identity system
+- **Real-time**: Polling-based updates (3-second intervals)
+
+### Frontend
+- **Framework**: Vanilla JavaScript with Tailwind CSS
+- **State Management**: Client-side state with server synchronization
+- **UI**: Responsive design with dark theme optimized for TRPG sessions
+
+## Database Schema
+- `rooms`: Room information with creator and settings
+- `room_members`: User roles and membership status
+- `dice_rolls`: All dice rolls with visibility settings
+- `room_messages`: Chat and system messages
+
+## API Endpoints
+- `POST /api/rooms/create`: Create new room
+- `POST /api/rooms/join`: Join existing room
+- `POST /api/rooms/leave`: Leave current room
+- `GET /api/rooms/{code}/info`: Get room information
+- `GET /api/rooms/{code}/rolls`: Get dice rolls (filtered by role)
+- `GET /api/rooms/{code}/messages`: Get chat messages
+- `POST /api/rooms/{code}/send-message`: Send chat message
+- `POST /api/dice/roll`: Submit dice roll
+- `GET /api/user/info`: Get current user information
+
+## Role-Based Visibility
+- **KP (Keeper)**: Can see all dice rolls (public and secret)
+- **PL (Player)**: Can see public rolls and their own secret rolls only
+- **Secret Dice**: Marked as "秘匿" and only visible to authorized users
+
+## Development Commands
+This is a frontend-only project with backend API integration. No build commands needed - just open `index.html` in a browser.
+
+## File Structure
+```
+index.html              # Main application file
+backend/               # Youware Backend code
+├── src/
+│   └── index.ts     # Worker entry point
+├── schema.sql          # Database schema
+├── package.json        # Dependencies
+└── wrangler.toml       # Worker configuration
+```
+
+## Testing
+The application includes comprehensive error handling and user feedback. Test both solo and room modes, ensuring proper role-based visibility for secret dice rolls.
+
+## Deployment
+- Frontend: Static HTML file (can be hosted anywhere)
+- Backend: Deployed via Youware Backend to Cloudflare Workers
+- Database: D1 SQLite database managed by Youware platform

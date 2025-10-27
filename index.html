@@ -920,6 +920,11 @@
         // Room Dice Rolling
         roomRollBtn.addEventListener('click', rollRoomDice);
 
+        // API base URL configuration
+        const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname.includes('vercel.app') 
+            ? 'https://backend.youware.com' 
+            : 'https://backend.youware.com';
+
         // Initialize
         async function init() {
             await loadUserInfo();
@@ -928,7 +933,7 @@
 
         async function loadUserInfo() {
             try {
-                const response = await fetch('https://backend.youware.com/__user_info__');
+                const response = await fetch(`${API_BASE_URL}/__user_info__`);
                 const result = await response.json();
                 
                 if (result.code === 0 && result.data) {
@@ -987,7 +992,7 @@
             }
 
             try {
-                const response = await fetch('https://backend.youware.com/api/rooms/create', {
+                const response = await fetch(`${API_BASE_URL}/api/rooms/create`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1030,7 +1035,7 @@
             }
 
             try {
-                const response = await fetch('https://backend.youware.com/api/rooms/join', {
+                const response = await fetch(`${API_BASE_URL}/api/rooms/join`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1067,7 +1072,7 @@
             if (!currentRoom || !currentUserId) return;
 
             try {
-                const response = await fetch('https://backend.youware.com/api/rooms/leave', {
+                const response = await fetch(`${API_BASE_URL}/api/rooms/leave`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1115,7 +1120,7 @@
             if (!message || !currentRoom) return;
 
             try {
-                const response = await fetch(`https://backend.youware.com/api/rooms/${currentRoom.room_code}/send-message`, {
+                const response = await fetch(`${API_BASE_URL}/api/rooms/${currentRoom.room_code}/send-message`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1158,7 +1163,7 @@
             const rollResult = rolls.join(' + ');
 
             try {
-                const response = await fetch('https://backend.youware.com/api/dice/roll', {
+                const response = await fetch(`${API_BASE_URL}/api/dice/roll`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1200,7 +1205,7 @@
 
             try {
                 // Get room info and members
-                const roomResponse = await fetch(`https://backend.youware.com/api/rooms/${currentRoom.room_code}/info`);
+                const roomResponse = await fetch(`${API_BASE_URL}/api/rooms/${currentRoom.room_code}/info`);
                 const roomResult = await roomResponse.json();
 
                 if (roomResult.room) {
@@ -1217,7 +1222,7 @@
                 }
 
                 // Get messages
-                const messagesResponse = await fetch(`https://backend.youware.com/api/rooms/${currentRoom.room_code}/messages`);
+                const messagesResponse = await fetch(`${API_BASE_URL}/api/rooms/${currentRoom.room_code}/messages`);
                 const messagesResult = await messagesResponse.json();
 
                 if (messagesResult.messages) {
@@ -1225,7 +1230,7 @@
                 }
 
                 // Get dice rolls
-                const rollsResponse = await fetch(`https://backend.youware.com/api/rooms/${currentRoom.room_code}/rolls`);
+                const rollsResponse = await fetch(`${API_BASE_URL}/api/rooms/${currentRoom.room_code}/rolls`);
                 const rollsResult = await rollsResponse.json();
 
                 if (rollsResult.rolls) {
